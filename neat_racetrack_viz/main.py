@@ -245,7 +245,7 @@ class CarEnv:
         self.checkpoint_radius_sq = max(gate_len, seg_med) * 9.0
         self.checkpoint_radius_sq = max(36.0, self.checkpoint_radius_sq)
         self._build_checkpoint_geom()
-        self.crashed = False  # ★ 추가: 충돌 플래그
+        self.crashed = False
         self.reset()
 
     def _build_checkpoint_geom(self) -> None:
@@ -277,7 +277,7 @@ class CarEnv:
         self.cleared_checkpoint = [False] * len(self.checkpoint_indices)
         self.lap_started = False
         self.done = False
-        self.crashed = False  # ★ 추가: 충돌 플래그 초기화
+        self.crashed = False
         self.path = [(self.x, self.y)]
 
     def _nearest_centerline_index(self, x: float, y: float) -> int:
@@ -354,16 +354,16 @@ class CarEnv:
         return math.hypot(ix - px, iy - py) ** 2 <= self.checkpoint_radius_sq
 
     # ──────────────────────────────────────────────────────────────────────────
-    # observe(): 입력 9개로 확장
-    # [0] norm_lateral_err     현재 횡방향 오차
-    # [1] norm_heading_err     현재 헤딩 오차
-    # [2] speed_norm           현재 속도
-    # [3] progress_norm        트랙 진행도
-    # [4] speed_delta_now      현재 권장속도 대비 편차 (+면 가속 필요)
-    # [5] min_future_speed_norm 전방 ~30m 중 최솟값 (코너 존재 여부)  ★ 핵심
-    # [6] brake_urgency        현재속도 - 전방최소속도 (양수면 지금 브레이킹 필요)  ★ 핵심
-    # [7] la_heading_err       중거리 전방 헤딩 오차
-    # [8] curvature_ahead      전방 평균 곡률 절댓값 (코너 심각도)  ★ 핵심
+    # observe(): 9 Inputs
+    # [0] norm_lateral_err      현재 횡방향 오차
+    # [1] norm_heading_err      현재 헤딩 오차
+    # [2] speed_norm            현재 속도
+    # [3] progress_norm         트랙 진행도
+    # [4] speed_delta_now       현재 권장속도 대비 편차 (+면 가속 필요)
+    # [5] min_future_speed_norm 전방 ~30m 중 최솟값 (코너 존재 여부)
+    # [6] brake_urgency         현재속도 - 전방최소속도 (양수면 지금 브레이킹 필요)
+    # [7] la_heading_err        중거리 전방 헤딩 오차
+    # [8] curvature_ahead       전방 평균 곡률 절댓값 (코너 심각도)
     # ──────────────────────────────────────────────────────────────────────────
     def observe(self) -> np.ndarray:
         idx = self._nearest_centerline_index(self.x, self.y)
@@ -385,8 +385,6 @@ class CarEnv:
         speed_delta_now = (target_speed_now - self.speed) / self.max_speed
         min_future_speed_norm = min_future_speed / self.max_speed
 
-        # ★ 브레이킹 긴급도: 현재속도 - 전방 최소 권장속도
-        # 양수 = 지금 브레이크를 밟아야 함, 값이 클수록 급브레이킹 필요
         brake_urgency = max(0.0, self.speed - min_future_speed) / self.max_speed
 
         la_heading_err = self._heading_error(idx_mid, self.heading) / math.pi
@@ -394,15 +392,15 @@ class CarEnv:
 
         return np.array(
             [
-                norm_err,                   # [0] 횡방향 오차
-                heading_err / math.pi,      # [1] 헤딩 오차
-                speed_norm,                 # [2] 현재 속도
-                progress_norm,              # [3] 진행도
-                speed_delta_now,            # [4] 현재 지점 속도 편차
-                min_future_speed_norm,      # [5] 전방 최소 권장속도  ★
-                brake_urgency,              # [6] 브레이킹 긴급도     ★
-                la_heading_err,             # [7] 중거리 헤딩 오차
-                curvature_ahead,            # [8] 전방 곡률 심각도    ★
+                ,                   # [0] 횡방향 오차
+                ,      # [1] 헤딩 오차
+                ,                 # [2] 현재 속도
+                ,              # [3] 진행도
+                ,            # [4] 현재 지점 속도 편차
+                ,      # [5] 전방 최소 권장속도  
+                ,              # [6] 브레이킹 긴급도     
+                ,             # [7] 중거리 헤딩 오차
+                ,            # [8] 전방 곡률 심각도    
             ],
             dtype=np.float64,
         )
@@ -505,26 +503,26 @@ class CarEnv:
         steer_penalty = self.settings.steer_penalty_weight * (steer_norm ** 2)
 
         reward = (
-            progress_reward
-            + speed_match_reward
-            + straight_accel_reward
-            + corner_brake_reward
-            - self.settings.lane_penalty_weight * lane_penalty
-            - self.settings.heading_penalty_weight * heading_penalty
-            - reverse_penalty
-            - low_speed_penalty
-            - straight_brake_penalty
-            - unneeded_brake_penalty
-            - corner_throttle_penalty
-            - corner_overspeed_penalty
-            - steer_penalty
+             # 진행도
+            +  # 목표 속도
+            +  # 직진 엑셀
+            +  # 코너 브레이크
+            - self.settings.lane_penalty_weight *  # 중앙선으로부터의 거리
+            - self.settings.heading_penalty_weight *  # 트랙 방향과 차량 방향 차이
+            -  # 역주행
+            -  # 저속주행
+            -  # 직진 브레이크
+            -  # 불필요한 브레이크
+            -  # 코너 엑셀
+            -  # 코너 과속
+            -  # 지그재그
         )
 
-        # ── 트랙 이탈: 빠를수록 더 큰 페널티 ★ ─────────────────────────────
+        # Offroad
         if lat_err > half_width * (1.15 * self.settings.offtrack_scale):
             speed_factor = self.speed / self.max_speed
-            reward -= 8.0 + 12.0 * speed_factor   # 최대 -20 (max_speed 시)
-            self.crashed = True  # ★ 추가: 충돌 플래그 설정
+            reward -= 8.0 + 12.0 * speed_factor   # Max. -20
+            self.crashed = True
             self.done = True
         elif self.step_count >= self.max_steps:
             self.done = True
@@ -535,10 +533,10 @@ class CarEnv:
         self.reset()
         fitness = 0.0
         while not self.done:
-            obs = self.observe()
-            out = net.activate(obs.tolist())
-            steer, throttle = out[0], out[1]
-            fitness += self.step(steer, throttle)
+            obs = # 입력값 관측
+            out = # 신경망 계산
+            steer, throttle = 
+            fitness += # 다음 상태
         if self.crashed:
             fitness += CRASH_FITNESS_PENALTY
         return fitness, np.asarray(self.path)
@@ -610,7 +608,7 @@ class LiveVizReporter(neat.reporting.BaseReporter):
         self.ax_net.clear()
         self.ax_net.set_title("Neural Network Activity")
         self.ax_net.set_ylim(-1.1, 1.1)
-        # 입력 9개로 업데이트
+        # 9 INPUTS
         self.in_labels = [
             "LatErr", "HeadErr", "Speed", "Prog",
             "SpdΔNow", "FutSpd", "BrakeUrg", "LA-Head", "Curv"
@@ -908,9 +906,7 @@ def run_training(
     else:
         pop.add_reporter(SilentReporter())
 
-    winner = pop.run(
-        lambda gs, cfg: eval_genomes(gs, cfg, env, live_reporter), generations
-    )
+    winner = # NEAT SIMULATION HERE
     print("\nTraining complete.")
     print(f"Winner fitness: {winner.fitness:.3f}")
     return winner

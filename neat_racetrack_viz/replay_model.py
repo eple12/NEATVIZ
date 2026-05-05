@@ -77,12 +77,12 @@ def rollout_trace(
     observations = []
     actions = []
     while not env.done:
-        obs = env.observe()
-        out = net.activate(obs.tolist())
-        steer, throttle = float(out[0]), float(out[1])
+        obs = 
+        out = 
+        steer, throttle = 
         observations.append(obs)
         actions.append([steer, throttle])
-        fitness += env.step(steer, throttle)
+        fitness += 
     if env.crashed:
         fitness += CRASH_FITNESS_PENALTY
     return (
