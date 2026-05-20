@@ -7,6 +7,7 @@ from typing import Any
 
 from tqdm import tqdm
 
+import matplotlib
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 import neat
@@ -14,6 +15,7 @@ import numpy as np
 
 from main import CRASH_FITNESS_PENALTY, CarEnv, DifficultySettings, TrackLoader
 
+matplotlib.use('TkAgg')
 
 IN_LABELS = [
     "LatErr",
@@ -77,12 +79,12 @@ def rollout_trace(
     observations = []
     actions = []
     while not env.done:
-        obs = 
-        out = 
-        steer, throttle = 
+        obs = env.observe()
+        out = net.activate(obs.tolist())
+        steer, throttle = float(out[0]), float(out[1])
         observations.append(obs)
         actions.append([steer, throttle])
-        fitness += 
+        fitness += env.step(steer, throttle)
     if env.crashed:
         fitness += CRASH_FITNESS_PENALTY
     return (

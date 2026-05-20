@@ -8,11 +8,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Sequence
 
+import matplotlib
 import matplotlib.pyplot as plt
 import neat
 import numpy as np
 import yaml
 
+matplotlib.use('TkAgg')
 
 # -----------------------------------------------------------------------------
 # Environment and reward parameter block
@@ -392,15 +394,15 @@ class CarEnv:
 
         return np.array(
             [
-                ,                   # [0] 횡방향 오차
-                ,      # [1] 헤딩 오차
-                ,                 # [2] 현재 속도
-                ,              # [3] 진행도
-                ,            # [4] 현재 지점 속도 편차
-                ,      # [5] 전방 최소 권장속도  
-                ,              # [6] 브레이킹 긴급도     
-                ,             # [7] 중거리 헤딩 오차
-                ,            # [8] 전방 곡률 심각도    
+                norm_err,                   # [0] 횡방향 오차
+                heading_err / math.pi,      # [1] 헤딩 오차
+                speed_norm,                 # [2] 현재 속도
+                progress_norm,              # [3] 진행도
+                speed_delta_now,            # [4] 현재 지점 속도 편차
+                min_future_speed_norm,      # [5] 전방 최소 권장속도  
+                brake_urgency,              # [6] 브레이킹 긴급도     
+                la_heading_err,             # [7] 중거리 헤딩 오차
+                curvature_ahead,            # [8] 전방 곡률 심각도    
             ],
             dtype=np.float64,
         )
@@ -503,19 +505,19 @@ class CarEnv:
         steer_penalty = self.settings.steer_penalty_weight * (steer_norm ** 2)
 
         reward = (
-             # 진행도
-            +  # 목표 속도
-            +  # 직진 엑셀
-            +  # 코너 브레이크
-            - self.settings.lane_penalty_weight *  # 중앙선으로부터의 거리
-            - self.settings.heading_penalty_weight *  # 트랙 방향과 차량 방향 차이
-            -  # 역주행
-            -  # 저속주행
-            -  # 직진 브레이크
-            -  # 불필요한 브레이크
-            -  # 코너 엑셀
-            -  # 코너 과속
-            -  # 지그재그
+            progress_reward # 진행도
+            + speed_match_reward # 목표 속도
+            + straight_accel_reward # 직진 엑셀
+            + corner_brake_reward # 코너 브레이크
+            - self.settings.lane_penalty_weight * lane_penalty # 중앙선으로부터의 거리
+            - self.settings.heading_penalty_weight * heading_penalty # 트랙 방향과 차량 방향 차이
+            - reverse_penalty # 역주행
+            - low_speed_penalty # 저속주행
+            - straight_brake_penalty # 직진 브레이크
+            - unneeded_brake_penalty # 불필요한 브레이크
+            - corner_throttle_penalty # 코너 엑셀
+            - corner_overspeed_penalty # 코너 과속
+            - steer_penalty # 지그재그
         )
 
         # Offroad
@@ -533,10 +535,10 @@ class CarEnv:
         self.reset()
         fitness = 0.0
         while not self.done:
-            obs = # 입력값 관측
-            out = # 신경망 계산
-            steer, throttle = 
-            fitness += # 다음 상태
+            obs = self.observe() # 입력값 관측
+            out = net.activate(obs.tolist()) # 신경망 계산
+            steer, throttle = out[0], out[1]
+            fitness += self.step(steer, throttle) # 다음 상태
         if self.crashed:
             fitness += CRASH_FITNESS_PENALTY
         return fitness, np.asarray(self.path)
@@ -906,7 +908,9 @@ def run_training(
     else:
         pop.add_reporter(SilentReporter())
 
-    winner = # NEAT SIMULATION HERE
+    winner = pop.run(
+        lambda gs, cfg: eval_genomes(gs, cfg, env, live_reporter), generations
+    )# NEAT SIMULATION HERE
     print("\nTraining complete.")
     print(f"Winner fitness: {winner.fitness:.3f}")
     return winner
